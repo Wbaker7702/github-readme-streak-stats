@@ -1,0 +1,68 @@
+name: Audit and Deploy
+
+on:
+  push:
+    branches: ["main", "cursor/audit-deploy-to-page-ba22"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: intl, mbstring, xml
+
+      - name: Install Composer Dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Audit Composer Dependencies
+        run: composer audit
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Node Dependencies
+        run: npm install
+
+      - name: Audit Node Dependencies
+        run: npm audit
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: audit
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/audit-deploy-to-page-ba22'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'src'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
